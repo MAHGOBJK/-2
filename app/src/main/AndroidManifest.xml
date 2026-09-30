@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+<manifest xmlns:android="http://android.com"
     package="com.muhgoub.panel">
 
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -28,8 +28,10 @@
             android:name=".MainActivity"
             android:exported="false" />
 
+        <!-- 🟢 التطابق التام: تم قفل وسم الخدمة لملفك الأصلي بنوع dataSync لتأمين تشغيل لوحة الروت بثبات في الخلفية -->
         <service
             android:name=".OverlayService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>
