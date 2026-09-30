@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.10.2)
+
+project("hudpanel")
+
+# تجميع مكتبة النواة وحقن ملف main.cpp المتوافق بالحروف الصغيرة
+add_library(hudpanel SHARED main.cpp)
+
+find_library(log-lib log)
+
+target_link_libraries(hudpanel ${log-lib})
