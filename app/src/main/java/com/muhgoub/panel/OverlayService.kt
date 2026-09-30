@@ -9,6 +9,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
@@ -55,7 +56,6 @@ class OverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        // 🟢 الحل الجذري: استخدام التخزين الافتراضي المباشر كلياً بدلاً من كلاس Prefs المفقود
         sp = getSharedPreferences("panel_prefs", Context.MODE_PRIVATE)
         startForeground(NOTIF_ID, buildNotification())
         checkGamePidAndRoot()
@@ -84,7 +84,7 @@ class OverlayService : Service() {
                 val reader = BufferedReader(InputStreamReader(process.inputStream))
                 val output = reader.readLine()
                 if (!output.isNullOrEmpty()) {
-                    gamePid = output.trim().split(" ")[0].toInt()
+                    gamePid = output.trim().split(" ").toInt()
                 }
             } catch (e: Exception) {
                 gamePid = -1
@@ -111,7 +111,8 @@ class OverlayService : Service() {
         return builder
             .setContentTitle("MUHGOUB")
             .setContentText("لوحة التحكم تعمل بالروت")
-            .setSmallIcon(R.drawable.ic_shield)
+            // 🟢 تم استبدال الأيقونة المفقودة بأيقونة النظام الافتراضية لمنع الأحمر
+            .setSmallIcon(android.R.drawable.sym_def_app_icon)
             .setContentIntent(pi)
             .setOngoing(true)
             .build()
@@ -126,7 +127,7 @@ class OverlayService : Service() {
     ).toInt()
 
     private fun showOverlay() {
-        val themed = ContextThemeWrapper(this, R.style.Theme_Panel)
+        val themed = ContextThemeWrapper(this, android.R.style.Theme_DeviceDefault_Dialog)
         val inflater = LayoutInflater.from(themed)
         val view = inflater.inflate(R.layout.overlay_menu, null)
 
@@ -233,8 +234,9 @@ class OverlayService : Service() {
         }
 
         val b = ImageView(this).apply {
-            setImageResource(R.drawable.ic_shield)
-            setBackgroundResource(R.drawable.bg_bubble)
+            // 🟢 استخدام أيقونة افتراضية آمنة من أندرويد لتفادي خطأ الـ Drawable الناقص
+            setImageResource(android.R.drawable.ic_menu_compass)
+            setBackgroundColor(Color.parseColor("#80000000"))
             scaleType = ImageView.ScaleType.FIT_CENTER
             setPadding(dp(10), dp(10), dp(10), dp(10))
             isClickable = true
@@ -278,8 +280,3 @@ class OverlayService : Service() {
     private fun setupDrag(header: View) {
         var startX = 0
         var startY = 0
-        var touchX = 0f
-        var touchY = 0f
-        header.setOnTouchListener { _, e ->
-            when (e.action) {
-                MotionEvent.ACTION_DOWN -> {
