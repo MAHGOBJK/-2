@@ -32,7 +32,7 @@ class OverlayService : Service() {
     companion object {
         const val CHANNEL_ID = "panel_overlay"
         const val NOTIF_ID = 1
-        const val TARGET_GAME = "com.tencent.ig" // معرّف حزمة اللعبة العالمية 64 بت القياسي
+        const val TARGET_GAME = "com.tencent.ig"
     }
 
     private lateinit var wm: WindowManager
@@ -44,6 +44,7 @@ class OverlayService : Service() {
     private var panelShown = false
     private var snapAnim: ValueAnimator? = null
     private var gamePid: Int = -1
+    private lateinit var sp: SharedPreferences
 
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "hide_capture") applySecureFlag()
@@ -54,9 +55,9 @@ class OverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        // 🟢 الحل الجذري: استخدام التخزين الافتراضي المباشر كلياً بدلاً من كلاس Prefs المفقود
+        sp = getSharedPreferences("panel_prefs", Context.MODE_PRIVATE)
         startForeground(NOTIF_ID, buildNotification())
-        
-        // 🟢 تفعيل النواة الخارقة لقنص الـ PID وصلاحيات الروت فور تشغيل الخدمة
         checkGamePidAndRoot()
     }
 
@@ -66,7 +67,7 @@ class OverlayService : Service() {
     }
 
     override fun onDestroy() {
-        Prefs.sp(this).unregisterOnSharedPreferenceChangeListener(prefListener)
+        sp.unregisterOnSharedPreferenceChangeListener(prefListener)
         snapAnim?.cancel()
         rootView?.let { try { wm.removeView(it) } catch (e: Exception) {} }
         bubble?.let { try { wm.removeView(it) } catch (e: Exception) {} }
@@ -76,12 +77,9 @@ class OverlayService : Service() {
         super.onDestroy()
     }
 
-    // ---------- 🟢 نواة الروت الذكية وقنص الـ PID حركياً ----------
-
     private fun checkGamePidAndRoot() {
         Thread {
             try {
-                // تنفيذ أمر su -c لقنص العملية من الكيرنل مباشرة عبر KernelSU المأمن
                 val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "pidof $TARGET_GAME"))
                 val reader = BufferedReader(InputStreamReader(process.inputStream))
                 val output = reader.readLine()
@@ -93,8 +91,6 @@ class OverlayService : Service() {
             }
         }.start()
     }
-
-    // ---------- notification ----------
 
     private fun buildNotification(): Notification {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -152,7 +148,7 @@ class OverlayService : Service() {
             y = dp(120)
         }
 
-        if (Prefs.getBool(this, "hide_capture")) {
+        if (sp.getBoolean("hide_capture", false)) {
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_SECURE
         }
 
@@ -173,7 +169,7 @@ class OverlayService : Service() {
         rootView = view
         panelShown = true
         bubble?.let { wm.addView(it, bubbleParams) }
-        Prefs.sp(this).registerOnSharedPreferenceChangeListener(prefListener)
+        sp.registerOnSharedPreferenceChangeListener(prefListener)
     }
 
     private fun togglePanel() {
@@ -195,7 +191,7 @@ class OverlayService : Service() {
     }
 
     private fun applySecureFlag() {
-        val hide = Prefs.getBool(this, "hide_capture")
+        val hide = sp.getBoolean("hide_capture", false)
         params.flags = if (hide) {
             params.flags or WindowManager.LayoutParams.FLAG_SECURE
         } else {
@@ -232,7 +228,7 @@ class OverlayService : Service() {
             y = dp(60)
         }
 
-        if (Prefs.getBool(this, "hide_capture")) {
+        if (sp.getBoolean("hide_capture", false)) {
             bubbleParams.flags = bubbleParams.flags or WindowManager.LayoutParams.FLAG_SECURE
         }
 
@@ -283,3 +279,7 @@ class OverlayService : Service() {
         var startX = 0
         var startY = 0
         var touchX = 0f
+        var touchY = 0f
+        header.setOnTouchListener { _, e ->
+            when (e.action) {
+                MotionEvent.ACTION_DOWN -> {
