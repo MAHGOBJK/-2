@@ -15,8 +15,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Panel">
 
+        <!-- 🟢 تصحيح السطر وإضافة المعرّف القياسي بالملي لشاشة الاسبلاش -->
         <activity
-            android:name=".SplashActivity"
+            android:name="com.muhgoub.panel.SplashActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -24,12 +25,15 @@
             </intent-filter>
         </activity>
 
+        <!-- 🟢 تصحيح السطر وإضافة المعرّف القياسي للشاشة الرئيسية -->
         <activity
-            android:name=".MainActivity"
+            android:name="com.muhgoub.panel.MainActivity"
             android:exported="false" />
 
+        <!-- 🟢 تصحيح السطر وإضافة المعرّف القياسي للخدمة الخلفية العائمة للوحة التحكم -->
         <service
-            android:name=".OverlayService"
+            android:name="com.muhgoub.panel.OverlayService"
             android:exported="false" />
+
     </application>
 </manifest>
