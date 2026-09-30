@@ -12,28 +12,12 @@ android {
         targetSdk 30
         versionCode 1
         versionName "1.0"
-
-        // 🟢 أسطر مضافة: تعريف محرك الـ C++ ومعمارية الـ 64 بت للأندرويد
-        externalNativeBuild {
-            cmake {
-                cppFlags "-std=c++17"
-                arguments "-DANDROID_STL=c++_shared"
-                abiFilters "arm64-v8a"
-            }
-        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
-
-    // 🟢 أسطر مضافة: ربط المحرك بملف التجميع السمول القياسي المتوافق
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/cmakelists.txt"
         }
     }
 
