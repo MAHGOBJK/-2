@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#0A0A0A</color>
+    <color name="blue">#2196F3</color>
+    <color name="cyan">#00E5FF</color>
+    <color name="teal">#2DD9D0</color>
+    <color name="version">#2ED3C8</color>
+    <color name="circle_off">#484848</color>
+    <color name="card">#1B1F23</color>
+    <color name="line">#555555</color>
+    <color name="label">#CFCFCF</color>
+    <color name="sub">#8E9399</color>
+</resources>

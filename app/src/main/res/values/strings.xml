@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MUHGOUB</string>
+    <string name="version">VERSION 1.0</string>
+    <string name="start_panel">تشغيل لوحة التحكم</string>
+    <string name="mode_normal">الوضع العادي</string>
+    <string name="mode_super">الوضع الفائق</string>
+    <string name="hide_title">إخفاء التصوير</string>
+    <string name="hide_sub">يجب منح صلاحية العرض فوق التطبيقات الأخرى أولاً</string>
+    <string name="stop_menu">إيقاف القائمة</string>
+    <string name="toast_on">تم التفعيل</string>
+    <string name="toast_off">تم القفل</string>
+    <string name="need_overlay">يجب منح صلاحية العرض فوق التطبيقات الأخرى أولاً</string>
+    <string name="toast_started">تم تشغيل %1$s</string>
+    <string name="toast_stopped">تم إيقاف %1$s</string>
+    <string name="start_panel_name">لوحة التحكم</string>
+    <string name="stop_menu_name">القائمة</string>
+</resources>
