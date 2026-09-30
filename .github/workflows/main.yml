@@ -1,0 +1,44 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    # 🟢 تثبيت جافا 11 المتوافقة مع المحرك القديم بسلام
+    - name: set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+
+    # 🟢 تثبيت محرك جرايدل 7.4 الرسمي المتوافق مع أكواد كلود
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '7.4'
+
+    # 🟢 إجبار توليد ملف الـ gradlew الناقص داخلياً ومنحه الصلاحيات تلقائياً لمنع خطأ الـ exit code 1
+    - name: Auto-generate Gradle Wrapper Binary
+      run: |
+        gradle wrapper --gradle-version 7.4
+        chmod +x gradlew
+
+    # 🟢 بناء وتجميع الـ APK النظيف
+    - name: Build with Gradle
+      run: |
+        ./gradlew assembleDebug
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: hud-debug-apk
+        path: "**/build/outputs/apk/debug/app-debug.apk"
