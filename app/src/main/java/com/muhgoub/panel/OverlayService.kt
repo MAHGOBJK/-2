@@ -18,33 +18,32 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.view.animation.DecelerateInterpolator
-import android.view.animation.OvershootInterpolator
 import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 class OverlayService : Service() {
 
     companion object {
         const val CHANNEL_ID = "panel_overlay"
         const val NOTIF_ID = 1
+        const val TARGET_GAME = "com.tencent.ig" // معرّف حزمة اللعبة العالمية 64 بت القياسي
     }
 
     private lateinit var wm: WindowManager
     private lateinit var params: WindowManager.LayoutParams
     private var rootView: View? = null
 
-    // الأيقونة العايمة اللي بتظهر لما القايمة تتقفل مؤقتا
     private var bubble: View? = null
     private lateinit var bubbleParams: WindowManager.LayoutParams
     private var panelShown = false
     private var snapAnim: ValueAnimator? = null
+    private var gamePid: Int = -1
 
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "hide_capture") applySecureFlag()
@@ -56,6 +55,9 @@ class OverlayService : Service() {
         super.onCreate()
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         startForeground(NOTIF_ID, buildNotification())
+        
+        // 🟢 تفعيل النواة الخارقة لقنص الـ PID وصلاحيات الروت فور تشغيل الخدمة
+        checkGamePidAndRoot()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -66,23 +68,30 @@ class OverlayService : Service() {
     override fun onDestroy() {
         Prefs.sp(this).unregisterOnSharedPreferenceChangeListener(prefListener)
         snapAnim?.cancel()
-        rootView?.animate()?.cancel()
-        rootView?.let {
-            try {
-                wm.removeView(it)
-            } catch (e: Exception) {
-            }
-        }
-        bubble?.let {
-            try {
-                wm.removeView(it)
-            } catch (e: Exception) {
-            }
-        }
+        rootView?.let { try { wm.removeView(it) } catch (e: Exception) {} }
+        bubble?.let { try { wm.removeView(it) } catch (e: Exception) {} }
         rootView = null
         bubble = null
         panelShown = false
         super.onDestroy()
+    }
+
+    // ---------- 🟢 نواة الروت الذكية وقنص الـ PID حركياً ----------
+
+    private fun checkGamePidAndRoot() {
+        Thread {
+            try {
+                // تنفيذ أمر su -c لقنص العملية من الكيرنل مباشرة عبر KernelSU المأمن
+                val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "pidof $TARGET_GAME"))
+                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                val output = reader.readLine()
+                if (!output.isNullOrEmpty()) {
+                    gamePid = output.trim().split(" ")[0].toInt()
+                }
+            } catch (e: Exception) {
+                gamePid = -1
+            }
+        }.start()
     }
 
     // ---------- notification ----------
@@ -101,18 +110,16 @@ class OverlayService : Service() {
             Notification.Builder(this)
         }
         val pi = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT
+            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return builder
             .setContentTitle("MUHGOUB")
-            .setContentText("لوحة التحكم تعمل")
+            .setContentText("لوحة التحكم تعمل بالروت")
             .setSmallIcon(R.drawable.ic_shield)
             .setContentIntent(pi)
             .setOngoing(true)
             .build()
     }
-
-    // ---------- overlay window ----------
 
     private fun dp(v: Int): Int = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics
@@ -127,8 +134,8 @@ class OverlayService : Service() {
         val inflater = LayoutInflater.from(themed)
         val view = inflater.inflate(R.layout.overlay_menu, null)
 
-        val w = mm(60f).coerceAtMost(resources.displayMetrics.widthPixels) // 6 cm
-        val h = mm(70f) // 7 cm
+        val w = mm(60f).coerceAtMost(resources.displayMetrics.widthPixels)
+        val h = mm(70f)
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         } else {
@@ -162,12 +169,29 @@ class OverlayService : Service() {
 
         createBubble()
 
-        // الترتيب مهم: القايمة الأول ثم الأيقونة، فالأيقونة تفضل فوق القايمة دايماً
         wm.addView(view, params)
         rootView = view
         panelShown = true
         bubble?.let { wm.addView(it, bubbleParams) }
         Prefs.sp(this).registerOnSharedPreferenceChangeListener(prefListener)
+    }
+
+    private fun togglePanel() {
+        if (panelShown) hidePanel() else showPanel()
+    }
+
+    private fun showPanel() {
+        if (!panelShown && rootView != null) {
+            rootView?.visibility = View.VISIBLE
+            panelShown = true
+        }
+    }
+
+    private fun hidePanel() {
+        if (panelShown && rootView != null) {
+            rootView?.visibility = View.GONE
+            panelShown = false
+        }
     }
 
     private fun applySecureFlag() {
@@ -189,8 +213,6 @@ class OverlayService : Service() {
         }
     }
 
-    // ---------- floating bubble (always on top of the panel) ----------
-
     private fun createBubble() {
         val dm = resources.displayMetrics
         val size = dp(52)
@@ -206,7 +228,6 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            // تبدأ في الركن العلوي الأيمن فوق القايمة
             x = dm.widthPixels - size - dp(6)
             y = dp(60)
         }
@@ -220,7 +241,6 @@ class OverlayService : Service() {
             setBackgroundResource(R.drawable.bg_bubble)
             scaleType = ImageView.ScaleType.FIT_CENTER
             setPadding(dp(10), dp(10), dp(10), dp(10))
-            contentDescription = getString(R.string.app_name)
             isClickable = true
             setOnClickListener { togglePanel() }
         }
@@ -228,118 +248,34 @@ class OverlayService : Service() {
         bubble = b
     }
 
-    private fun togglePanel() {
-        if (panelShown) hidePanel() else showPanel()
-    }
-
-    private fun showPanel() {
-        val panel = rootView ?: return
-        if (panelShown) return
-        panelShown = true
-
-        // القايمة ترجع تستقبل اللمس، وتظهر بحركة fade + تكبير خفيف
-        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-        try { wm.updateViewLayout(panel, params) } catch (e: Exception) { }
-
-        panel.animate().cancel()
-        panel.visibility = View.VISIBLE
-        panel.alpha = 0f
-        panel.scaleX = 0.92f
-        panel.scaleY = 0.92f
-        panel.animate()
-            .alpha(1f).scaleX(1f).scaleY(1f)
-            .setDuration(200)
-            .setInterpolator(DecelerateInterpolator())
-            .start()
-    }
-
-    private fun hidePanel() {
-        val panel = rootView ?: return
-        if (!panelShown) return
-        panelShown = false
-
-        panel.animate().cancel()
-        panel.animate()
-            .alpha(0f).scaleX(0.92f).scaleY(0.92f)
-            .setDuration(160)
-            .setInterpolator(DecelerateInterpolator())
-            .withEndAction {
-                if (!panelShown && rootView != null) {
-                    panel.visibility = View.GONE
-                    // نافذة شفافة لا تستقبل اللمس، فمتحجبش اللي تحتها
-                    params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                    try { wm.updateViewLayout(panel, params) } catch (e: Exception) { }
-                }
-            }
-            .start()
-    }
-
-    private fun setupBubbleTouch(b: View) {
-        val slop = ViewConfiguration.get(this).scaledTouchSlop
+    private fun setupBubbleTouch(view: View) {
         var startX = 0
         var startY = 0
         var touchX = 0f
         var touchY = 0f
-        var moved = false
-        b.setOnTouchListener { v, e ->
-            val dm = resources.displayMetrics
+        view.setOnTouchListener { v, e ->
             when (e.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    snapAnim?.cancel()
                     startX = bubbleParams.x
                     startY = bubbleParams.y
                     touchX = e.rawX
                     touchY = e.rawY
-                    moved = false
-                    v.animate().scaleX(0.9f).scaleY(0.9f).setDuration(90).start()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = e.rawX - touchX
-                    val dy = e.rawY - touchY
-                    if (!moved && (Math.abs(dx) > slop || Math.abs(dy) > slop)) moved = true
-                    if (moved) {
-                        // تفضل جوه حدود الشاشة أثناء السحب
-                        bubbleParams.x = (startX + dx).toInt()
-                            .coerceIn(0, (dm.widthPixels - bubbleParams.width).coerceAtLeast(0))
-                        bubbleParams.y = (startY + dy).toInt()
-                            .coerceIn(0, (dm.heightPixels - bubbleParams.height).coerceAtLeast(0))
-                        try { wm.updateViewLayout(v, bubbleParams) } catch (ex: Exception) { }
-                    }
+                    bubbleParams.x = startX + (e.rawX - touchX).toInt()
+                    bubbleParams.y = startY + (e.rawY - touchY).toInt()
+                    wm.updateViewLayout(view, bubbleParams)
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    v.animate().scaleX(1f).scaleY(1f).setDuration(140)
-                        .setInterpolator(OvershootInterpolator()).start()
-                    if (moved) snapToEdge(v) else v.performClick()
-                    true
-                }
-                MotionEvent.ACTION_CANCEL -> {
-                    v.animate().scaleX(1f).scaleY(1f).setDuration(140).start()
+                    if (Math.abs(e.rawX - touchX) < 5 && Math.abs(e.rawY - touchY) < 5) {
+                        v.performClick()
+                    }
                     true
                 }
                 else -> false
             }
-        }
-    }
-
-    // بعد ما تسيب الأيقونة تنزلق بنعومة لأقرب حافة
-    private fun snapToEdge(v: View) {
-        val dm = resources.displayMetrics
-        val margin = dp(6)
-        val left = margin
-        val right = (dm.widthPixels - bubbleParams.width - margin).coerceAtLeast(left)
-        val target = if (bubbleParams.x + bubbleParams.width / 2 < dm.widthPixels / 2) left else right
-
-        snapAnim?.cancel()
-        snapAnim = ValueAnimator.ofInt(bubbleParams.x, target).apply {
-            duration = 220
-            interpolator = DecelerateInterpolator()
-            addUpdateListener {
-                bubbleParams.x = it.animatedValue as Int
-                try { wm.updateViewLayout(v, bubbleParams) } catch (ex: Exception) { }
-            }
-            start()
         }
     }
 
@@ -347,132 +283,3 @@ class OverlayService : Service() {
         var startX = 0
         var startY = 0
         var touchX = 0f
-        var touchY = 0f
-        header.setOnTouchListener { _, e ->
-            when (e.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    startX = params.x
-                    startY = params.y
-                    touchX = e.rawX
-                    touchY = e.rawY
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    params.x = startX + (e.rawX - touchX).toInt()
-                    params.y = startY + (e.rawY - touchY).toInt()
-                    rootView?.let { wm.updateViewLayout(it, params) }
-                    true
-                }
-                else -> false
-            }
-        }
-    }
-
-    // ---------- content ----------
-
-    private val checkLabels = listOf(
-        "حبل 1", "حبل٢",
-        "كين٣", "عمو٤",
-        "جين٥", "كين٦",
-        "تفعيل رقم ٧", "تفعيل رقم ٨",
-        "تفعيل رقم ٩", "تفعيل رقم ١٠",
-        "تفعيل رقم ١١", "تفعيل رقم ١٢"
-    )
-
-    private fun buildChecks(ctx: Context, inflater: LayoutInflater, container: LinearLayout) {
-        for (r in 0 until 6) {
-            val row = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-            }
-            for (c in 0..1) {
-                val idx = r * 2 + c
-                val item = inflater.inflate(R.layout.item_check, row, false)
-                item.layoutParams = LinearLayout.LayoutParams(0, dp(46), 1f).apply {
-                    setMargins(dp(4), dp(4), dp(4), dp(4))
-                }
-                bindCheck(item, checkLabels[idx], "chk_$idx")
-                row.addView(item)
-            }
-            container.addView(row)
-        }
-    }
-
-    private fun bindCheck(item: View, label: String, key: String) {
-        val text = item.findViewById<TextView>(R.id.item_text)
-        val box = item.findViewById<CheckBox>(R.id.item_box)
-        text.text = label
-
-        fun render() {
-            val on = Prefs.getBool(this, key)
-            box.isChecked = on
-            item.setBackgroundResource(if (on) R.drawable.bg_item_on else R.drawable.bg_item)
-        }
-        render()
-        item.setOnClickListener {
-            val newState = !Prefs.getBool(this, key)
-            Prefs.setBool(this, key, newState)
-            render()
-            toast(newState)
-        }
-    }
-
-    private fun buildGroup(ctx: Context, container: LinearLayout, key: String, labels: List<String>) {
-        val offIndex = labels.lastIndex
-        val row = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        }
-        val pills = labels.mapIndexed { i, label ->
-            TextView(ctx).apply {
-                text = label
-                gravity = Gravity.CENTER
-                textSize = 16f
-                maxLines = 1
-                isClickable = true
-                isFocusable = true
-                layoutParams = LinearLayout.LayoutParams(0, dp(52), 1f).apply {
-                    setMargins(dp(4), dp(4), dp(4), dp(4))
-                }
-            }
-        }
-
-        fun render() {
-            val sel = Prefs.getInt(this, key, offIndex)
-            pills.forEachIndexed { i, pill ->
-                val active = i == sel && i != offIndex
-                pill.setBackgroundResource(if (active) R.drawable.bg_pill_on else R.drawable.bg_pill)
-                pill.setTextColor(if (i == offIndex && !active) 0xFFBDBDBD.toInt() else 0xFFFFFFFF.toInt())
-            }
-        }
-
-        pills.forEachIndexed { i, pill ->
-            pill.setOnClickListener {
-                val old = Prefs.getInt(this, key, offIndex)
-                val newSel = if (i == old) offIndex else i
-                Prefs.setInt(this, key, newSel)
-                render()
-                toast(newSel != offIndex)
-            }
-            row.addView(pill)
-        }
-        render()
-        container.addView(row)
-    }
-
-    private fun addSpace(ctx: Context, container: LinearLayout, heightDp: Int) {
-        container.addView(View(ctx), LinearLayout.LayoutParams(1, dp(heightDp)))
-    }
-
-    private fun toast(on: Boolean) {
-        Toast.makeText(
-            this,
-            getString(if (on) R.string.toast_on else R.string.toast_off),
-            Toast.LENGTH_SHORT
-        ).show()
-    }
-}
